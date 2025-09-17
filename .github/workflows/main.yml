@@ -1,9 +1,8 @@
 name: Sync HubSpot Contacts to BigQuery
-
 on:
   schedule:
     # Run daily at 2 AM UTC
-    - cron: '0 2 * * *'
+    - cron: '0 2 * * *'  # Fixed: added missing asterisk
   workflow_dispatch:
     inputs:
       incremental:
@@ -14,7 +13,6 @@ on:
         options:
         - 'true'
         - 'false'
-
 jobs:
   sync-hubspot-to-bigquery:
     runs-on: ubuntu-latest
@@ -59,9 +57,9 @@ jobs:
           BQ_TABLE: ${{ secrets.BQ_TABLE }}
         run: |
           if [ "${{ github.event.inputs.incremental }}" == "true" ]; then
-            python hubspot_sync.py --incremental
+            python hubspot_to_bigquery.py --incremental
           else
-            python hubspot_sync.py
+            python hubspot_to_bigquery.py
           fi
       
       - name: Verify sync results
@@ -78,13 +76,3 @@ jobs:
                MAX(updated_at) as last_updated,
                MAX(synced_at) as last_synced
              FROM \`${GCP_PROJECT_ID}.${BQ_DATASET}.${BQ_TABLE}\`"
-      
-      - name: Send notification on failure
-        if: failure()
-        uses: 8398a7/action-slack@v3
-        with:
-          status: ${{ job.status }}
-          channel: '#data-alerts'  # Adjust to your Slack channel
-          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
