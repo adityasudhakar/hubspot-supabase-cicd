@@ -44,6 +44,7 @@ class SupabaseToBigQueryMigration:
         
         # Standard Supabase PostgreSQL connection format
         conn_string = f"postgresql://postgres.{supabase_project_id}:{self.supabase_key}@aws-0-us-west-1.pooler.supabase.com:6543/postgres"
+
         
         print("Note: You may need to update the connection string based on your Supabase region")
         print("Check your Supabase Dashboard -> Settings -> Database for the exact connection details")
