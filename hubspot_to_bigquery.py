@@ -168,13 +168,8 @@ class HubSpotBigQuerySync:
         """Load DataFrame to BigQuery"""
         
         job_config = bigquery.LoadJobConfig(
-            write_disposition=write_disposition,  # WRITE_TRUNCATE or WRITE_APPEND
-            schema_update_options=[bigquery.SchemaUpdateOption.ALLOW_FIELD_ADDITION],
-            time_partitioning=bigquery.TimePartitioning(
-                type_=bigquery.TimePartitioningType.DAY,
-                field="updated_at"
-            ),
-            clustering_fields=["hubspot_id", "email"]
+            write_disposition=write_disposition,
+            autodetect=True
         )
         
         print(f"Loading {len(df)} contacts to BigQuery table: {self.table_ref}")
