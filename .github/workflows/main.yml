@@ -1,0 +1,90 @@
+name: Sync HubSpot Contacts to BigQuery
+
+on:
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      incremental:
+        description: 'Use incremental sync (append new data)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+        - 'true'
+        - 'false'
+
+jobs:
+  sync-hubspot-to-bigquery:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Cache pip dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install google-cloud-bigquery pandas requests python-dotenv
+      
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+      
+      - name: Run HubSpot sync
+        env:
+          HUBSPOT_API_KEY: ${{ secrets.HUBSPOT_API_KEY }}
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          BQ_DATASET: ${{ secrets.BQ_DATASET }}
+          BQ_TABLE: ${{ secrets.BQ_TABLE }}
+        run: |
+          if [ "${{ github.event.inputs.incremental }}" == "true" ]; then
+            python hubspot_sync.py --incremental
+          else
+            python hubspot_sync.py
+          fi
+      
+      - name: Verify sync results
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          BQ_DATASET: ${{ secrets.BQ_DATASET }}
+          BQ_TABLE: ${{ secrets.BQ_TABLE }}
+        run: |
+          # Query the table to verify data was loaded
+          bq query --use_legacy_sql=false \
+            "SELECT 
+               COUNT(*) as total_contacts,
+               COUNT(DISTINCT hubspot_id) as unique_contacts,
+               MAX(updated_at) as last_updated,
+               MAX(synced_at) as last_synced
+             FROM \`${GCP_PROJECT_ID}.${BQ_DATASET}.${BQ_TABLE}\`"
+      
+      - name: Send notification on failure
+        if: failure()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          channel: '#data-alerts'  # Adjust to your Slack channel
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
